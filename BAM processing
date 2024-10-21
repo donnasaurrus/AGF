@@ -26,7 +26,7 @@ done
 
 for i in */*bam
 do
-java -Xmx100G -jar /work/dmh614/programs/picard.jar AddOrReplaceReadGroups \
+java -Xmx100G -jar (PATH)/picard.jar AddOrReplaceReadGroups \
 I=$i \
 O=${i/bam/rg.bam} \
 RGID=H7GWYCCX2_L5 \ <---Change as needed
