@@ -1,0 +1,46 @@
+### Calculate allele frequencies for each group (CROSS/ORpre)
+
+(PATH)/bcftools-1.12/htslib-1.12/bin/vcftools --vcf chr1_SNP_final_filtered.vcf --keep assmigCACROSS.txt --freq --out chr1_assmigCACROSS
+
+(PATH)/bcftools-1.12/htslib-1.12/bin/vcftools --vcf chr1_SNP_final_filtered.vcf --keep assmigOR1820.txt --freq --out chr1_assmigORpre
+
+
+### Split ALLELE:FREQ into separate columns, and label columns
+
+awk 'BEGIN{FS=OFS="\t"} NR==1{print "CHROM","POS","N_ALLELE","N_CHR","ALLELE_REF","FREQ_REF","ALLELE_ALT","FREQ_ALT"; next} 
+{
+    split($5, arr1, ":");
+    split($6, arr2, ":");
+    print $1, $2, $3, $4, arr1[1], arr1[2], arr2[1], arr2[2]
+}' chr1_assmigCACROSS.frq > splitchr1_CROSS.frq
+
+awk 'BEGIN{FS=OFS="\t"} NR==1{print "CHROM","POS","N_ALLELE","N_CHR","ALLELE_REF","FREQ_REF","ALLELE_ALT","FREQ_ALT"; next} 
+{
+    split($5, arr1, ":");
+    split($6, arr2, ":");
+    print $1, $2, $3, $4, arr1[1], arr1[2], arr2[1], arr2[2]
+}' chr1_assmigORpre.frq > splitchr1_ORpre.frq
+
+### Filter dataset by alleles that have a frequency of 0 in OR pre (either reference or alternate)
+
+awk 'BEGIN{FS=OFS="\t"} NR==1{print; next} ($6 == 0 || $8 == 0)' splitchr1_ORpre.frq > chr1_ORpre_absent.frq
+
+### filter to those positions in both CROSS and BEL frq files
+
+awk 'NR==FNR {pos[$2]; next} $2 in pos' chr1_ORpre_absent.frq splitchr1_CROSS.frq > chr1filtered_CROSS.frq
+
+### list positions where reference allele is 0 and alternate allele is 0
+
+awk 'BEGIN{FS=OFS="\t"} NR>1 && $6 == 0 {print $2}' chr1_ORpre_absent.frq > chr1_poslist.txt
+
+awk 'BEGIN{FS=OFS="\t"} NR>1 && $8 == 0 {print $2}' chr1_ORpre_absent.frq > chr1_altposlist.txt
+
+### Final filter
+
+# reference allele in OR pre is 0, AND CROSS FREQ_REF >= 0.3
+awk 'BEGIN{FS=OFS="\t"} NR==FNR{pos[$1]; next} $2 in pos && $6 >= 0.3' chr1_poslist.txt chr1filtered_CROSS.frq > chr1_CROSSprivate.frq
+
+# alternate allele in OR pre is 0, AND CROSS FREQ_ALT >= 0.3
+awk 'BEGIN{FS=OFS="\t"} NR==FNR{pos[$1]; next} $2 in pos && $8 >= 0.3' chr1_altposlist.txt chr1filtered_CROSS.frq > chr1_CROSSALTprivate.frq
+
+## Repeat for ALL 14 chromosomes
