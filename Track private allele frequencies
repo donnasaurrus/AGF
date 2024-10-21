@@ -1,9 +1,8 @@
 ## Calculate allele frequencies for each population each year post-AGF
+## Repeat for each population x year combination AND ALL 14 chromosomes
 
 (PATH)/bcftools-1.12/htslib-1.12/bin/vcftools --vcf chr1_SNP_final_filtered.vcf --keep assmig21BMP.txt --freq --out BMP21_chr1
 (PATH)/bcftools-1.12/htslib-1.12/bin/vcftools --vcf chr1_SNP_final_filtered.vcf --keep assmig22BMP.txt --freq --out BMP22_chr1
-
-## Repeat for each population x year combination
 
 awk 'BEGIN{FS=OFS="\t"} NR==1{print "CHROM","POS","N_ALLELES","N_CHR","ALLELE_REF","FREQ_REF","ALLELE_ALT","FREQ_ALT"; next} 
 {
