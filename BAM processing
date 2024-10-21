@@ -1,0 +1,88 @@
+## Trim and quality filter all files
+for i in *1.fq.gz
+do
+(PATH)/bbmap/bbduk.sh in1=$i in2=${i/1.fq.gz/2.fq.gz} out1=${i/1.fq.gz/clean1}.fq.gz out2=${i/1.fq.gz/}clean2.fq.gz ref=(PATH)/bbmap/resources/nextera_LMP_adapter.fa.gz ktrim=r tbo tpe qtrim=rl trimq=10
+done
+
+## Align to reference genome
+module load bwa/0.7.17/intel-19.0.5
+module load samtools/1.10/intel-19.0.5
+
+## Index the genome
+bwa index Mimulus_guttatus_var_IM62.mainGenome.fasta
+
+for i in *_clean1.fq.gz
+do
+bwa mem -t 20 Mimulus_guttatus_var_IM62.mainGenome.fasta $i ${i/_clean1.fq.gz/_1.fq.gz.fq.gz} > ${i/_clean1.fq.gz/.sam}
+done
+
+## Convert sam file to bam file
+for i in *.sam
+do
+samtools view -S -b ${i} > ${i/.sam/.bam}
+done
+
+## Process bam files by adding read groups 
+
+for i in */*bam
+do
+java -Xmx100G -jar /work/dmh614/programs/picard.jar AddOrReplaceReadGroups \
+I=$i \
+O=${i/bam/rg.bam} \
+RGID=H7GWYCCX2_L5 \ <---Change as needed
+RGLB=lib1 \  <---Change as needed
+RGPL=ILLUMINA \
+RGPU=CKDL200146708 \  <---Change as needed
+RGSM=$i \
+SORT_ORDER=coordinate
+done
+
+## Mark Duplicates
+
+for i in *rg.bam
+do
+java -Xmx100G -jar (PATH)/picard.jar MarkDuplicates \
+I=$i \
+O=${i/rg.bam/dups.bam} \
+METRICS_FILE=${i/rg.bam/final.bam} \
+CREATE_INDEX=true
+done
+
+#### Quality Assessment of bam files
+
+for i in */*.bam
+do 
+    bam_name=$(basename "$i" .bam)
+    outdir="${bam_name}_qualimap_report"
+    qualimap bamqc -bam "$i" -outdir "$outdir" -outformat PDF -nt 1
+done
+
+## Calling variants
+
+(PATH)/bcftools-1.12/bin/bcftools mpileup -r Chr_01 -f Mimulus_guttatus_var_IM62.mainGenome.fasta *.dups.bam --threads 20 > chr1.vcf
+
+(PATH)/bcftools-1.12/bin/bcftools call chr1.vcf -v -m -o mguttatus_chr1.vcf --threads 20
+
+## Repeat for ALL 14 chromosomes
+
+## Index genome for GATK format:
+
+(PATH)/java -jar picard.jar CreateSequenceDictionary R= Mimulus_guttatus_var_IM62.mainGenome.fasta O= Mimulus_guttatus_var_IM62.mainGenome.dict
+
+## Select variants (SNPs):
+
+(PATH)/gatk-4.1.8.1/gatk SelectVariants -R Mimulus_guttatus_var_IM62.mainGenome.fasta -V mguttatus_chr1.vcf --select-type-to-include SNP -O chr1_SNP.vcf
+
+## Repeat for ALL 14 chromosomes
+
+## Quality Filter
+
+(PATH)/gatk-4.1.8.1/gatk VariantFiltration -R Mimulus_guttatus_var_IM62.mainGenome.fasta -V chr1_SNP.vcf --filter-expression "QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0" --filter-name "my_snp_filter" -O chr1_SNP_filtered.vcf
+
+## Repeat for ALL 14 chromosomes
+
+## Final SNP filter
+
+(PATH)/vcftools/bin/vcftools --vcf chr1_SNP_filtered.vcf --max-missing 0.75 --remove-filtered-all --minQ 500 --recode --recode-INFO-all --min-alleles 2 --max-alleles 2 --out chr1_SNP_final_filtered.vcf
+
+## Repeat for ALL 14 chromosomes
